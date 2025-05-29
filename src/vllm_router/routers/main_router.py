@@ -13,7 +13,9 @@
 # limitations under the License.
 import json
 
-from fastapi import APIRouter, BackgroundTasks, Request
+from typing import Optional
+
+from fastapi import APIRouter, BackgroundTasks, Request, APIRouter, UploadFile, File, Form
 from fastapi.responses import JSONResponse, Response
 
 from vllm_router.dynamic_config import get_dynamic_config_watcher
@@ -181,3 +183,26 @@ async def health() -> Response:
         )
     else:
         return JSONResponse(content={"status": "healthy"}, status_code=200)
+
+@main_router.post("/v1/audio/transcriptions")
+async def audio_transcriptions(
+file: UploadFile = File(...),
+    model: str = Form(...),
+    prompt: Optional[str] = Form(None),
+    response_format: Optional[str] = Form(None),
+    temperature: Optional[float] = Form(None),
+    language: Optional[str] = Form("en")
+):
+    mock_result_dict = {
+            "status": "audio transcription endpoint connected!",
+            "filename": file.filename,
+            "model": model,
+            "prompt": prompt,
+            "response_format": response_format,
+            "temperature": temperature,
+            "language": language,
+    }
+    return JSONResponse(
+        content=mock_result_dict,
+        status_code=200,
+    )
