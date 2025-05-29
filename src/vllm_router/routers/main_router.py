@@ -15,6 +15,8 @@ import json
 
 from typing import Optional
 
+import httpx
+
 from fastapi import APIRouter, BackgroundTasks, Request, APIRouter, UploadFile, File, Form
 from fastapi.responses import JSONResponse, Response
 
@@ -185,24 +187,32 @@ async def health() -> Response:
         return JSONResponse(content={"status": "healthy"}, status_code=200)
 
 @main_router.post("/v1/audio/transcriptions")
-async def audio_transcriptions(
-file: UploadFile = File(...),
-    model: str = Form(...),
-    prompt: Optional[str] = Form(None),
-    response_format: Optional[str] = Form(None),
-    temperature: Optional[float] = Form(None),
-    language: Optional[str] = Form("en")
-):
-    mock_result_dict = {
-            "status": "audio transcription endpoint connected!",
-            "filename": file.filename,
-            "model": model,
-            "prompt": prompt,
-            "response_format": response_format,
-            "temperature": temperature,
-            "language": language,
+async def audio_transcriptions(request: Request):
+    # Grab raw multipart/form-data body + headers, then forward to your vLLM whisper server.
+    body = await request.body()
+
+    # strip hop-by-hop headers
+    headers = {
+        k : v for k,v in request.headers.items() if k.lower() not in (
+            "host", "content-length", "connection"
+        )
     }
-    return JSONResponse(
-        content=mock_result_dict,
-        status_code=200,
+
+    async with httpx.AsyncClient(base_url="http://localhost:8002") as client:
+        proxied = await client.post(
+            "/v1/audio/transcriptions",
+            content=body,
+            headers=headers,
+        )
+
+    return Response(
+        content=proxied.content,
+        status_code=proxied.status_code,
+        headers={
+            k:v for k, v in proxied.headers.items() if k.lower() not in (
+                "content-encoding", "transfer-encoding", "connection"
+            )
+        }
     )
+
+
