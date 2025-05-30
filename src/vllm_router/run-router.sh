@@ -1,6 +1,6 @@
 #!/bin/bash
 if [[ $# -ne 1 ]]; then
-    echo "Usage $0 <router port>"
+    echo "Usage $0 <router port> <backend port>"
     exit 1
 fi
 
@@ -38,17 +38,17 @@ fi
 
 # Use this command when testing with whisper transcription
 ROUTER_PORT=$1
+SERVER_BACKEND_PORT=$2
 
 python3 -m vllm_router.app \
     --host 0.0.0.0 \
-    --port 8000 \
+    --port "${ROUTER_PORT}" \
     --service-discovery static \
-    --static-backends "http://localhost:8002" \
+    --static-backends "${BACKEND_URL}" \
     --static-models "openai/whisper-small" \
     --static-model-types "transcription" \
-    --static-backend-health-checks \
+    --static-model-labels "transcription" \
     --routing-logic roundrobin \
     --log-stats \
-    --log-stats-interval 10 \
     --engine-stats-interval 10 \
     --request-stats-window 10

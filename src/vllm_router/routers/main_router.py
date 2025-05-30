@@ -221,14 +221,26 @@ file: UploadFile = File(...),
     # get the backend url
     endpoints = get_service_discovery().get_endpoint_info()
 
-    logger.debug("==== Discovered endpoints ====")
+    logger.debug("==== Total endpoints ====")
     logger.debug(endpoints)
-    logger.debug("==== Discovered endpoints ====")
+    logger.debug("==== Total endpoints ====")
+
+    # TODO: right now is skipping label check in code for local testing
+    endpoints = [
+        ep for ep in endpoints
+        if model in ep.model_names  # that actually serve your model
+    ]
+
+    logger.debug("==== Discovered endpoints after filtering ====")
+    logger.debug(endpoints)
+    logger.debug("==== Discovered endpoints after filtering ====")
 
     # filter the endpoints url for transcriptions
     transcription_endpoints = [
-        ep for ep in endpoints if ep.model_label == "transcription" and model in ep.model_names
+        ep for ep in endpoints
+        if model in ep.model_names
     ]
+
 
     logger.debug("====List of transcription endpoints====" )
     logger.debug(transcription_endpoints)
