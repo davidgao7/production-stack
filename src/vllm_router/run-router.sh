@@ -1,6 +1,6 @@
 #!/bin/bash
-if [[ $# -ne 1 ]]; then
-    echo "Usage $0 <router port> <backend port>"
+if [[ $# -ne 2 ]]; then
+    echo "Usage $0 <router port> <backend url>"
     exit 1
 fi
 
