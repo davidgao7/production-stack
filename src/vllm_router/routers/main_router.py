@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
-
-from typing import Optional
+import time
 
 import httpx
 
-from fastapi import APIRouter, BackgroundTasks, Request, APIRouter, UploadFile, File, Form
+from fastapi import BackgroundTasks, HTTPException, Request, APIRouter, UploadFile, File, Form
 from fastapi.responses import JSONResponse, Response
 
+from vllm_router.stats.request_stats import RequestStatsMonitor
 from vllm_router.dynamic_config import get_dynamic_config_watcher
 from vllm_router.log import init_logger
 from vllm_router.protocols import ModelCard, ModelList
 from vllm_router.service_discovery import get_service_discovery
+from vllm_router.routers.routing_logic import get_routing_logic
 from vllm_router.services.request_service.request import route_general_request
 from vllm_router.stats.engine_stats import get_engine_stats_scraper
 from vllm_router.version import __version__
@@ -111,8 +112,7 @@ async def show_version():
 
 @main_router.get("/v1/models")
 async def show_models():
-    """
-    Returns a list of all models available in the stack
+    """Returns a list of all models available in the stack.
 
     Args:
         None
@@ -151,8 +151,7 @@ async def show_models():
 
 @main_router.get("/health")
 async def health() -> Response:
-    """
-    Endpoint to check the health status of various components.
+    """Endpoint to check the health status of various components.
 
     This function verifies the health of the service discovery module and
     the engine stats scraper. If either component is down, it returns a
@@ -187,32 +186,100 @@ async def health() -> Response:
         return JSONResponse(content={"status": "healthy"}, status_code=200)
 
 @main_router.post("/v1/audio/transcriptions")
-async def audio_transcriptions(request: Request):
-    # Grab raw multipart/form-data body + headers, then forward to your vLLM whisper server.
-    body = await request.body()
+async def audio_transcriptions(
+file: UploadFile = File(...),
+    model: str      = Form(...),
+    prompt: str | None          = Form(None),
+    response_format: str | None = Form(None),
+    temperature: float | None   = Form(None),
+    language: str               = Form("en"),
+):
 
-    # strip hop-by-hop headers
-    headers = {
-        k : v for k,v in request.headers.items() if k.lower() not in (
-            "host", "content-length", "connection"
-        )
+    logger.debug("==== Enter audio_transcriptions ====")
+    logger.debug("Received upload: %s (%s)", file.filename, file.content_type)
+    logger.debug("Params: model=%s prompt=%r response_format=%r temperature=%r language=%s",
+                 model, prompt, response_format, temperature, language)
+
+    # read the bytes
+    data = await file.read()
+    logger.debug("=== Read %d bytes from uploaded file", len(data))
+
+    # rebuild a multipart/form-data payload
+    multipart = {
+        "file": (file.filename, data, file.content_type),
+        "model": (None, model),
+        "prompt": (None, prompt or ""),
+        "response_format": (None, response_format or ""),
+        "temperature": (None, str(temperature)) if temperature is not None else (),
+        "language": (None, language),
     }
 
-    async with httpx.AsyncClient(base_url="http://localhost:8002") as client:
-        proxied = await client.post(
-            "/v1/audio/transcriptions",
-            content=body,
-            headers=headers,
+    logger.debug("==== Multipart payload keys ====")
+    logger.debug(list(multipart.keys()))
+    logger.debug("==== Multipart payload keys ====")
+
+    # get the backend url
+    endpoints = get_service_discovery().get_endpoint_info()
+
+    logger.debug("==== Discovered endpoints ====")
+    logger.debug(endpoints)
+    logger.debug("==== Discovered endpoints ====")
+
+    # filter the endpoints url for transcriptions
+    transcription_endpoints = [
+        ep for ep in endpoints if ep.model_label == "transcription" and model in ep.model_names
+    ]
+
+    logger.debug("====List of transcription endpoints====" )
+    logger.debug(transcription_endpoints)
+    logger.debug("====List of transcription endpoints====" )
+
+    if not transcription_endpoints:
+        logger.error("No transcription backend available for model %s", model)
+        raise HTTPException(
+            status_code=503,
+            detail=f"No transcription backend for model {model}"
         )
 
-    return Response(
-        content=proxied.content,
-        status_code=proxied.status_code,
-        headers={
-            k:v for k, v in proxied.headers.items() if k.lower() not in (
-                "content-encoding", "transfer-encoding", "connection"
-            )
-        }
+    # grab the current engin and request stats
+    engine_stats = get_engine_stats_scraper().get_engine_stats()
+    request_stats = RequestStatsMonitor().get_request_stats(time.time())
+    router = get_routing_logic()
+
+    # pick one using the router's configured logic (roundrobin, least-loaded, etc.)
+    chosen_url = router.route_request(
+        transcription_endpoints,
+        engine_stats,
+        request_stats,
+        # we don’t need to pass the original FastAPI Request object here,
+        # but you can if your routing logic looks at headers or body
+        None
     )
 
+    logger.info("Proxying transcription request to %s", chosen_url)
+
+    # proxy the request
+    async with httpx.AsyncClient(base_url=chosen_url) as client:
+        logger.debug("Sending multipart to %s/v1/audio/transcriptions …", chosen_url)
+        proxied = await client.post("/v1/audio/transcriptions", files=multipart)
+    logger.info("Received %d from whisper backend", proxied.status_code)
+
+
+    # return the whisper response unmodified
+    resp = proxied.json()
+    logger.debug("==== Whisper response payload ====")
+    logger.debug(resp)
+    logger.debug("==== Whisper response payload ====")
+
+    logger.debug("Backend response headers: %s", proxied.headers)
+    logger.debug("Backend response body (truncated): %r", proxied.content[:200])
+
+    return JSONResponse(
+        content=resp,
+        status_code=proxied.status_code,
+        headers={
+            k: v for k, v in proxied.headers.items()
+            if k.lower() not in ("content-encoding", "transfer-encoding", "connection")
+        }
+    )
 
