@@ -41,11 +41,12 @@ ROUTER_PORT=$1
 
 python3 -m vllm_router.app \
     --host 0.0.0.0 \
-    --port "${ROUTER_PORT}" \
+    --port 8000 \
     --service-discovery static \
     --static-backends "http://localhost:8002" \
     --static-models "openai/whisper-small" \
     --static-model-types "transcription" \
+    --static-backend-health-checks \
     --routing-logic roundrobin \
     --log-stats \
     --log-stats-interval 10 \
