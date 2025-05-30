@@ -38,7 +38,7 @@ fi
 
 # Use this command when testing with whisper transcription
 ROUTER_PORT=$1
-SERVER_BACKEND_PORT=$2
+BACKEND_URL=$2
 
 python3 -m vllm_router.app \
     --host 0.0.0.0 \
