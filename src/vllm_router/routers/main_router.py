@@ -205,9 +205,9 @@ file: UploadFile = File(...),
     files = {
         "file": (file.filename, payload_bytes, file.content_type),
     }
-    logger.debug("=========files=========")
-    logger.debug(files)
-    logger.debug("=========files=========")
+    # logger.debug("=========files=========")
+    # logger.debug(files)
+    # logger.debug("=========files=========")
 
     data = {
         "model": model,
