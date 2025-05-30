@@ -190,7 +190,7 @@ async def audio_transcriptions(
 file: UploadFile = File(...),
     model: str      = Form(...),
     prompt: str | None          = Form(None),
-    response_format: str | None = Form(None),
+    response_format: str | None = Form("json"),
     temperature: float | None   = Form(None),
     language: str               = Form("en"),
 ):
@@ -211,10 +211,14 @@ file: UploadFile = File(...),
 
     data = {
         "model": model,
-        "prompt": prompt or "",
-        **({"response_format": response_format} if response_format else {}),
         "language": language,
     }
+
+    if prompt:
+        data["prompt"] = prompt
+
+    if response_format:
+        data["response_format"] = response_format
 
     if temperature is not None:
         data["temperature"] = str(temperature)
@@ -276,7 +280,14 @@ file: UploadFile = File(...),
     logger.info("Proxying transcription request to %s", chosen_url)
 
     # proxy the request
-    async with httpx.AsyncClient(base_url=chosen_url) as client:
+    # by default httpx will only wait for 5 seconds, large audio transcriptions generally
+    # take longer than that
+    async with httpx.AsyncClient(base_url=chosen_url, timeout=httpx.Timeout(
+        connect=60.0,        # connect timeout
+        read=300.0,         # read timeout
+        write=30.0,         # if you’re streaming uploads
+        pool=None,          # no pool timeout
+    )) as client:
         logger.debug("Sending multipart to %s/v1/audio/transcriptions …", chosen_url)
         proxied = await client.post("/v1/audio/transcriptions", data=data,files=files)
     logger.info("Received %d from whisper backend", proxied.status_code)
