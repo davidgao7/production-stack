@@ -200,23 +200,28 @@ file: UploadFile = File(...),
     logger.debug("Params: model=%s prompt=%r response_format=%r temperature=%r language=%s",
                  model, prompt, response_format, temperature, language)
 
-    # read the bytes
-    data = await file.read()
-    logger.debug("=== Read %d bytes from uploaded file", len(data))
+    # read file bytes
+    payload_bytes = await file.read()
+    files = {
+        "file": (file.filename, payload_bytes, file.content_type),
+    }
+    logger.debug("=========files=========")
+    logger.debug(files)
+    logger.debug("=========files=========")
 
-    # rebuild a multipart/form-data payload
-    multipart = {
-        "file": (file.filename, data, file.content_type),
-        "model": (None, model),
-        "prompt": (None, prompt or ""),
-        "response_format": (None, response_format or ""),
-        "temperature": (None, str(temperature)) if temperature is not None else (),
-        "language": (None, language),
+    data = {
+        "model": model,
+        "prompt": prompt or "",
+        "response_format": response_format or "",
+        "language": language,
     }
 
-    logger.debug("==== Multipart payload keys ====")
-    logger.debug(list(multipart.keys()))
-    logger.debug("==== Multipart payload keys ====")
+    if temperature is not None:
+        data["temperature"] = str(temperature)
+
+    logger.debug("==== data payload keys ====")
+    logger.debug(list(data.keys()))
+    logger.debug("==== data payload keys ====")
 
     # get the backend url
     endpoints = get_service_discovery().get_endpoint_info()
@@ -273,7 +278,7 @@ file: UploadFile = File(...),
     # proxy the request
     async with httpx.AsyncClient(base_url=chosen_url) as client:
         logger.debug("Sending multipart to %s/v1/audio/transcriptions …", chosen_url)
-        proxied = await client.post("/v1/audio/transcriptions", files=multipart)
+        proxied = await client.post("/v1/audio/transcriptions", data=data,files=files)
     logger.info("Received %d from whisper backend", proxied.status_code)
 
 
