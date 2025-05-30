@@ -212,7 +212,7 @@ file: UploadFile = File(...),
     data = {
         "model": model,
         "prompt": prompt or "",
-        "response_format": response_format or "",
+        "response_format": response_format or "json",
         "language": language,
     }
 
