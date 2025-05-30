@@ -40,6 +40,7 @@ fi
 ROUTER_PORT=$1
 
 python3 -m vllm_router.app \
+    --host 0.0.0.0 \
     --port "${ROUTER_PORT}" \
     --service-discovery static \
     --static-backends "http://localhost:8002" \
