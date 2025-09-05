@@ -569,11 +569,16 @@ async def route_general_transcriptions(
     logger.debug(endpoints)
     logger.debug("==== Total endpoints ====")
 
+    logger.debug("==== attributes for each endpoints ====")
+    for ep in endpoints:
+        logger.debug(f"Endpoint attribute: {vars(ep)}")
+    logger.debug("==== attributes for each endpoints ====")
+
     # filter the endpoints url by model name and label for transcriptions
     transcription_endpoints = [
         ep
         for ep in endpoints
-        if model == ep.model_name
+        if model == ep.model_names
         and ep.model_label == "transcription"
         and not ep.sleep  # Added ep.sleep == False
     ]
