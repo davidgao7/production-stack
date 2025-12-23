@@ -1,4 +1,4 @@
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 # --- Prometheus Gauges ---
 # Existing metrics
@@ -24,6 +24,28 @@ gpu_prefix_cache_queries_total = Gauge(
     ["server"],
 )
 current_qps = Gauge("vllm:current_qps", "Current Queries Per Second", ["server"])
+
+# model label to existing metrics
+current_qps_per_model = Gauge("vllm:current_qps_per_model", "Current QPS per model", ["server", "model"])
+avg_latency_per_model = Gauge("vllm:avg_latency_per_model", "Average latency per model", ["server", "model"])
+avg_itl_per_model = Gauge("vllm:avg_itl_per_model", "Average ITL per model", ["server", "model"])
+num_prefill_requests_per_model = Gauge("vllm:num_prefill_requests_per_model", "Prefill requests per model", ["server", "model"])
+num_decoding_requests_per_model = Gauge("vllm:num_decoding_requests_per_model", "Decoding requests per model", ["server", "model"])
+
+# error tracking metrics
+request_errors_total = Counter(
+    "vllm:request_errors_total",
+    "Total request errors",
+    ["model", "status_code", "error_type"]
+)
+
+request_duration_seconds = Histogram(
+    "vllm:request_duration_seconds",
+    "Request duration histogram",
+    ["model", "status"],
+    buckets=(0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0)
+)
+
 avg_decoding_length = Gauge(
     "vllm:avg_decoding_length", "Average Decoding Length", ["server"]
 )
